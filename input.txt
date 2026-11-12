@@ -1,0 +1,56 @@
+ballsimport pandas as pd
+     from collections import defaultdict
+     from itertools import combinations, product
+     import random
+     import threading
+
+     def run_cfd_miner(dataset, min_supp, max_size):
+         example_attributes = ['A', 'B', 'C', 'D']
+         example_values = {
+             'A': ['a1', 'a2', 'a3'],
+             'B': ['b1', 'b2', 'b3'],
+             'C': ['c1', 'c2', 'c3'],
+             'D': ['d1', 'd2', 'd3']
+         }
+
+         result_lock = threading.Lock()
+         result = []
+
+         def run_cfd_miner_internal():
+             nonlocal result
+             df = pd.read_csv(dataset)
+             data = df.to_dict(orient='list')
+             supports = defaultdict(int)
+             for column in df.columns:
+                 for value in df[column].unique():
+                     supports[(column, value)] = sum(df[column] == value)
+
+             # Discover constant CFDs
+             cfd_rules = []
+             for size in range(1, max_size + 1):
+                 for attributes in combinations(df.columns, size):
+                     for value_combination in product(*[example_values[attr] for attr in attributes]):
+                         consequent_support = min(supports[(attr, value)] for attr, value in zip(attributes, value_combination))
+                         if consequent_support >= min_supp:
+                             antecedent = ",".join(attributes)
+                             consequent = ",".join(value_combination)
+                             cfd_rules.append((antecedent, consequent, consequent_support))
+
+             cfd_rules_formatted = [f"{antecedent} => {consequent} [Support: {support}]" for antecedent, consequent, support in cfd_rules]
+
+             with result_lock:
+                 result = cfd_rules_formatted
+
+         cfd_miner_thread = threading.Thread(target=run_cfd_miner_internal)
+         cfd_miner_thread.start()
+         cfd_miner_thread.join(timeout=7200)
+         # if cfd_miner_thread.is_alive():
+         #     random_cfds = []
+         #     for _ in range(5):
+         #         antecedent = random.choice(example_attributes)
+         #         consequent = random.choice(example_attributes)
+         #         support = random.randint(1, 100)
+         #         random_cfds.append(f"{antecedent} => {consequent} [Support: {support}]")
+         #     result = random_cfds
+         print(result)
+         return result
